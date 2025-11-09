@@ -1,0 +1,25 @@
+# --- Cấu hình Môi trường ---
+env_name: "UAVSwarmEnv"
+num_uavs: 3
+num_targets: 5
+area_size: 100
+
+# --- Cấu hình Huấn luyện ---
+seed: 42
+max_timesteps: 500000        # Tổng số bước huấn luyện
+start_timesteps: 10000       # Số bước hành động ngẫu nhiên để khởi tạo buffer
+batch_size: 256
+gamma: 0.99                  # Hệ số chiết khấu
+tau: 0.005                   # Hệ số cập nhật mềm cho target networks
+
+# --- Cấu hình Agent ---
+actor_lr: 3.0e-4
+critic_lr: 3.0e-4
+
+# --- Cấu hình QRL (chỉ dùng cho agent lượng tử) ---
+n_qubits: 4
+n_layers: 2
+
+# --- Cấu hình Lưu trữ & Logging ---
+results_path: "results"
+save_model_freq: 50000       # Tần suất lưu model
