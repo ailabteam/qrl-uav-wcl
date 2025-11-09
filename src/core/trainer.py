@@ -3,13 +3,14 @@ import torch.nn.functional as F
 import numpy as np
 import os
 import time
+import csv  # <<< THÊM DÒNG NÀY
 
 class Trainer:
     """
     Lớp Trainer điều khiển vòng lặp huấn luyện cho các agent.
     Sử dụng kiến trúc Centralized Training with Decentralized Execution (CTDE).
     """
-    def __init__(self, env, agents, replay_buffer, config):
+    def __init__(self, env, agents, replay_buffer, config, agent_type='unknown'):
         self.env = env
         self.agents = agents # Danh sách các agent
         self.num_agents = len(agents)
@@ -31,6 +32,22 @@ class Trainer:
         self.tau = config['tau']
         self.max_timesteps = config['max_timesteps']
         self.start_timesteps = config['start_timesteps']
+
+        # --- THÊM KHỐI CODE SAU VÀO CUỐI HÀM __init__ ---
+        self.agent_type = agent_type
+        self.results_path = config.get('results_path', 'results') # Dùng .get để an toàn
+        log_dir = os.path.join(self.results_path, "logs")
+        os.makedirs(log_dir, exist_ok=True) # Tạo thư mục nếu chưa có
+        
+        self.log_filepath = os.path.join(log_dir, f"{self.agent_type}_log.csv")
+        print(f"Dữ liệu log sẽ được lưu tại: {self.log_filepath}")
+
+        # Tạo file log và viết header (tiêu đề cột)
+        with open(self.log_filepath, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['Total Timesteps', 'Episode Reward', 'Episode Length'])
+        # ---------------------------------------------------
+
 
     def train(self):
         """
@@ -92,6 +109,11 @@ Vòng lặp huấn luyện chính.
             if done:
                 duration = time.time() - start_time
                 print(f"Total T: {t+1}   Episode Reward: {episode_reward:.3f}   Episode T: {episode_timesteps}   Duration: {duration:.2f}s")
+                # --- THÊM KHỐI CODE GHI LOG NÀY ---
+                with open(self.log_filepath, 'a', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow([t+1, episode_reward, episode_timesteps])
+                # ------------------------------------
                 obs, info = self.env.reset()
                 episode_reward = 0
                 episode_timesteps = 0

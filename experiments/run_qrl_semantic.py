@@ -73,7 +73,8 @@ def main(config):
     replay_buffer = ReplayBuffer(global_obs_dim, buffer_action_dim)
 
     # --- Khởi tạo Trainer ---
-    trainer = Trainer(env, agents, replay_buffer, config)
+    # Sửa thành:
+    trainer = Trainer(env, agents, replay_buffer, config, agent_type='QRL')
 
     # --- Bắt đầu Huấn luyện ---
     print("Bắt đầu quá trình huấn luyện Agent QRL...")

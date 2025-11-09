@@ -55,7 +55,8 @@ def main(config):
     buffer_action_dim = config['num_uavs'] * 2
     replay_buffer = ReplayBuffer(global_obs_dim, buffer_action_dim)
 
-    trainer = Trainer(env, agents, replay_buffer, config)
+    # Sửa thành:
+    trainer = Trainer(env, agents, replay_buffer, config, agent_type='DRL')
 
     print("Bắt đầu quá trình huấn luyện Agent DRL (Baseline)...")
     trainer.train()
