@@ -3,6 +3,7 @@ env_name: "UAVSwarmEnv"
 num_uavs: 3
 num_targets: 5
 area_size: 100
+max_episode_steps: 250 # <<<< THÊM DÒNG NÀY
 
 # --- Cấu hình Huấn luyện ---
 seed: 42

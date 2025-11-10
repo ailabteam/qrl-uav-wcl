@@ -4,6 +4,7 @@ import numpy as np
 import os
 import time
 import csv  # <<< THÊM DÒNG NÀY
+from tqdm import tqdm
 
 class Trainer:
     """
@@ -32,13 +33,15 @@ class Trainer:
         self.tau = config['tau']
         self.max_timesteps = config['max_timesteps']
         self.start_timesteps = config['start_timesteps']
+        self.max_episode_steps = config['max_episode_steps'] # <<<< THÊM DÒNG NÀY
+
 
         # --- THÊM KHỐI CODE SAU VÀO CUỐI HÀM __init__ ---
         self.agent_type = agent_type
         self.results_path = config.get('results_path', 'results') # Dùng .get để an toàn
         log_dir = os.path.join(self.results_path, "logs")
         os.makedirs(log_dir, exist_ok=True) # Tạo thư mục nếu chưa có
-        
+
         self.log_filepath = os.path.join(log_dir, f"{self.agent_type}_log.csv")
         print(f"Dữ liệu log sẽ được lưu tại: {self.log_filepath}")
 
@@ -49,75 +52,86 @@ class Trainer:
         # ---------------------------------------------------
 
 
+
     def train(self):
         """
-Vòng lặp huấn luyện chính.
+        Vòng lặp huấn luyện chính. (PHIÊN BẢN NÂNG CẤP VỚI LOGGING)
         """
         obs, info = self.env.reset()
         episode_reward = 0
         episode_timesteps = 0
+        
+        # Biến đếm số lần cập nhật mạng
+        num_updates = 0
+        
+        # Sử dụng tqdm để tạo thanh tiến trình
+        print("Bắt đầu vòng lặp huấn luyện chính...")
+        progress_bar = tqdm(range(int(self.max_timesteps)), desc="Tổng tiến trình")
 
-        start_time = time.time()
-
-        for t in range(int(self.max_timesteps)):
+        for t in progress_bar: # Thay vòng lặp for cũ bằng tqdm
             episode_timesteps += 1
-
-            # --- TÌM VÀ THAY THẾ KHỐI CODE TỪ "1. Chọn hành động" ĐẾN HẾT DÒNG "self.replay_buffer.add..." ---
-
+            
             # 1. Chọn hành động
             if t < self.start_timesteps:
-                # Hành động ngẫu nhiên, sample() sẽ trả về đúng định dạng tuple lồng nhau
                 actions_tuple = self.env.action_space.sample()
             else:
-                # Agent chọn hành động và tạo ra tuple lồng nhau
                 actions_list = []
                 for i in range(self.num_agents):
-                    agent_obs = torch.FloatTensor(obs[i]).to(self.device) # obs từ env luôn ở trên CPU
-                    # --- THAY ĐỔI Ở ĐÂY ---
-                    # Lấy hành động (là tensor trên GPU) và chuyển nó về CPU, sau đó lấy giá trị số
+                    agent_obs = torch.FloatTensor(obs[i]).to(self.device)
                     move_act, comm_act = self.agents[i].select_action(agent_obs)
                     actions_list.append((move_act.cpu().item(), comm_act.cpu().item()))
                 actions_tuple = tuple(actions_list)
 
             # 2. Thực thi hành động trong môi trường
-            # env.step() giờ đây nhận vào đúng định dạng nó mong đợi
             next_obs, reward, terminated, truncated, info = self.env.step(actions_tuple)
             done = terminated or truncated
 
             # 3. Lưu kinh nghiệm vào Replay Buffer
-            # --- THAY ĐỔI Ở ĐÂY ---
-            # actions_tuple giờ đã chứa các số Python thông thường, nên np.array sẽ hoạt động
             actions_to_save = np.array(actions_tuple).flatten()
-
-            # Chúng ta lưu trạng thái và hành động chung cho centralized critic
             flat_obs = obs.flatten()
             flat_next_obs = next_obs.flatten()
             self.replay_buffer.add(flat_obs, actions_to_save, reward, flat_next_obs, float(done))
 
-
             obs = next_obs
             episode_reward += reward
 
+            # --- LOGGING CHI TIẾT GIAI ĐOẠN ĐẦU ---
+            if t == self.start_timesteps:
+                print(f"\n[INFO] Đã hoàn thành {self.start_timesteps} bước khởi tạo. Bắt đầu cập nhật mạng...")
+            # ----------------------------------------
+            
             # 4. Huấn luyện các agent
             if t >= self.start_timesteps:
                 for agent in self.agents:
-                    # Mỗi agent có thể có logic cập nhật riêng
-                    # Ở đây ta giả định tất cả dùng chung buffer và logic
                     agent.update(self.replay_buffer, self.batch_size, self.agents)
+                num_updates += 1
 
-
-            if done:
-                duration = time.time() - start_time
-                print(f"Total T: {t+1}   Episode Reward: {episode_reward:.3f}   Episode T: {episode_timesteps}   Duration: {duration:.2f}s")
-                # --- THÊM KHỐI CODE GHI LOG NÀY ---
+            # --- LOGGING TIẾN TRÌNH CẬP NHẬT ---
+            if t >= self.start_timesteps and t % 1000 == 0: # In ra mỗi 1000 bước
+                progress_bar.set_postfix({
+                    "Episode Reward": f"{episode_reward:.2f}",
+                    "Num Updates": num_updates
+                })
+            # ------------------------------------
+                
+            # Giả định một episode có độ dài tối đa để reset
+            # Điều này rất quan trọng, nếu không chương trình sẽ chạy mãi trong một episode
+            max_episode_steps = 250 # <<<<<< THÊM GIỚI HẠN NÀY
+            if done or (episode_timesteps >= max_episode_steps):
+                # Ghi log ra file CSV
                 with open(self.log_filepath, 'a', newline='') as f:
                     writer = csv.writer(f)
                     writer.writerow([t+1, episode_reward, episode_timesteps])
-                # ------------------------------------
+                
+                # In ra terminal
+                print(f"\n--- Episode End ---")
+                print(f"Total T: {t+1}/{int(self.max_timesteps)}   Episode Reward: {episode_reward:.3f}   Episode T: {episode_timesteps}")
+                print(f"-------------------")
+
                 obs, info = self.env.reset()
                 episode_reward = 0
                 episode_timesteps = 0
-                start_time = time.time()
+
 
     def save_models(self, path):
         """Lưu model của tất cả các agent."""
